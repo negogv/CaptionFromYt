@@ -5,11 +5,13 @@ from youtube_transcript_api.formatters import TextFormatter
 
 from math import ceil
 
-from telebot import TeleBot
+from telebot import TeleBot, formatting
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, Message, ReplyKeyboardMarkup, \
     InputFile
 from telebot.callback_data import CallbackData, CallbackDataFilter
 from telebot.custom_filters import AdvancedCustomFilter
+
+import json
 
 bot = TeleBot('TOKEN')
 
@@ -27,8 +29,7 @@ class MainFilter(AdvancedCustomFilter):
 
 lang_factory = CallbackData('lang_code', prefix='languages')
 
-languages = {'ru': 'Russian', 'uk': 'Ukrainian', 'en': 'English', 'en-GB': 'British English',
-             'en-US': 'American English'}
+languages = {'ru': 'Russian', 'uk': 'Ukrainian', 'en': 'English', 'en-GB': 'British English', 'en-US': 'American English'}
 all_lang_codes = set(languages)
 
 
@@ -53,12 +54,12 @@ class LanguagesCallbackFilter(AdvancedCustomFilter):
 
 
 class VideoConfig:
-    def __init__(self, link: str, action: str):
+    def __init__(self, link: str, action: str, caption_language = None, caption_type = 'Message', grade = 0):
         self.link = link
         self.action = action
-        self.caption_language = None
-        self.caption_type = 'Message'
-        self.grade = 0
+        self.caption_language = caption_language
+        self.caption_type = caption_type
+        self.grade = grade
 
 
 users_history = {}
@@ -85,7 +86,10 @@ def caption_lang(message: Message):
     try:
         link = message.text
         video = VideoConfig(link, 'Get captions')
-        users_history[message.chat.id] = [video]
+        if message.chat.id in users_history:
+            users_history[message.chat.id].append(video)
+        elif message.chat.id not in users_history:
+            users_history[message.chat.id] = [video]
         video = YouTube(link)
         video_id = video.video_id
         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
@@ -127,11 +131,11 @@ def caption_send_message(call: CallbackQuery):
     try:
         users_history[call.message.chat.id][-1].caption_type = call.data
         text_formatted = get_txt_capt(call.message.chat.id)
-        msg_amount = ceil(len(text_formatted) / 4096)  # message in telegram may contain max 4096
+        msg_amount = ceil(len(text_formatted)/4096)  # message in telegram may contain max 4096
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
                               text='There is your captions!')
         for i in range(msg_amount):  # sending captions
-            message_text = text_formatted[4096 * i:4096 * (i + 1)]
+            message_text = text_formatted[4096*i:4096*(i+1)]
             bot.send_message(call.message.chat.id, message_text)
         bot.send_message(call.message.chat.id, 'Grade your experience', reply_markup=grade_experience())
     except Exception as e:
@@ -143,11 +147,11 @@ def caption_send_txt(call: CallbackQuery):
     try:
         users_history[call.message.chat.id][-1].caption_type = call.data
         text_formatted = get_txt_capt(call.message.chat.id)
-        with open('../yt to text/captions.txt', 'w', encoding='utf-8') as file_txt:  # creating txt file with subtitles
+        with open('captions.txt', 'w', encoding='utf-8') as file_txt:  # creating txt file with subtitles
             file_txt.write(text_formatted)
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
                               text='There is your captions!')
-        bot.send_document(call.message.chat.id, InputFile('../yt to text/captions.txt'))
+        bot.send_document(call.message.chat.id, InputFile('captions.txt'))
         bot.send_message(call.message.chat.id, 'Grade your experience', reply_markup=grade_experience())
     except Exception as e:
         bot.reply_to(call.message, 'error with sending txt file function')
@@ -167,6 +171,51 @@ def grade_exp(call: CallbackQuery):
                                    f'Language of captions: {languages[lang_code]}\n'
                                    f'Type of captions: {caption_type}\n\n'
                                    f'Use /start to restart the survey')
+    with open("users-history.json", "w") as file:
+        json.dump([{id: [vid.__dict__ for vid in users_history[id]]} for id in users_history], file)
+
+
+@bot.message_handler(commands=['myhistory'])
+def myhistory(message: Message):
+    bot.send_message(message.chat.id, text=history(message.chat.id))
+
+
+@bot.message_handler(commands=['historyof'])
+def myhistory(message: Message):
+    try:
+        id = int(message.text.replace('/historyof ', ''))
+        bot.send_message(message.chat.id, text=history(id))
+    except Exception as e:
+        bot.send_message(message.chat.id, 'Something went wrong :(\nMaybe your user isn`t in database')
+
+
+@bot.message_handler(commands=['help'])
+def help_command(message: Message):
+    bot.send_message(message.chat.id, f'You can use /start command to get captions from video\n'
+                                      f'/myhistory command to check your history or\n'
+                                      f'/historyof + {formatting.hitalic("user id")} to check someone`s history',
+                     parse_mode='HTML')
+
+
+def history(id):
+    with open("users-history.json", "r") as file:
+        data = json.load(file)
+        person_dict = {}
+        for item in data:
+            for user_id, user_videos in item.items():
+                person_dict[user_id] = [VideoConfig(link=vc["link"],
+                                                    action=vc["action"],
+                                                    caption_language=vc["caption_language"],
+                                                    caption_type=vc["caption_type"],
+                                                    grade=vc["grade"]) for vc in user_videos]
+    msg_text = f'There is history of user {id}'
+    for vid in person_dict[str(id)]:
+        msg_text += f'\n\nLink: {vid.link}\n' \
+                    f'Action: {vid.action}\n' \
+                    f'Caption language: {languages[vid.caption_language]}\n' \
+                    f'Caption type: {vid.caption_type}\n' \
+                    f'Grade: {vid.grade}'
+    return msg_text
 
 
 if __name__ == '__main__':
