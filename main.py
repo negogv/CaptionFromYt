@@ -178,6 +178,8 @@ def grade_exp(call: CallbackQuery):
                 for id in users_history:
                     if str(id) in item:
                         item[str(id)].extend([vid.__dict__ for vid in users_history[id]])
+                    elif str(id) not in item:
+                        item[str(id)] = [vid.__dict__ for vid in users_history[id]]
         with open("users-history.json", "w") as file:
             json.dump(data, file)
     except FileNotFoundError as e:
