@@ -177,7 +177,10 @@ def grade_exp(call: CallbackQuery):
 
 @bot.message_handler(commands=['myhistory'])
 def myhistory(message: Message):
-    bot.send_message(message.chat.id, text=history(message.chat.id))
+    try:
+        bot.send_message(message.chat.id, text=history(message.chat.id))
+    except Exception as e:
+        bot.send_message(message.chat.id, 'Something went wrong :(\nMaybe you aren`t in database')
 
 
 @bot.message_handler(commands=['historyof'])
