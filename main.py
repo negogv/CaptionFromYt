@@ -171,8 +171,20 @@ def grade_exp(call: CallbackQuery):
                                    f'Language of captions: {languages[lang_code]}\n'
                                    f'Type of captions: {caption_type}\n\n'
                                    f'Use /start to restart the survey')
-    with open("users-history.json", "w") as file:
-        json.dump([{id: [vid.__dict__ for vid in users_history[id]]} for id in users_history], file)
+    try:
+        with open("users-history.json", "r") as file:
+            data = json.load(file)
+            for item in data:
+                for id in users_history:
+                    if str(id) in item:
+                        item[str(id)].extend([vid.__dict__ for vid in users_history[id]])
+        with open("users-history.json", "w") as file:
+            json.dump(data, file)
+    except FileNotFoundError as e:
+        with open("users-history.json", "w") as file:
+            json.dump([{id: [vid.__dict__ for vid in users_history[id]]} for id in users_history], file)
+        print('Json file created')
+
 
 
 @bot.message_handler(commands=['myhistory'])
@@ -184,13 +196,12 @@ def myhistory(message: Message):
 
 
 @bot.message_handler(commands=['historyof'])
-def myhistory(message: Message):
+def historyof(message: Message):
     try:
         id = int(message.text.replace('/historyof ', ''))
         bot.send_message(message.chat.id, text=history(id))
     except Exception as e:
         bot.send_message(message.chat.id, 'Something went wrong :(\nMaybe your user isn`t in database')
-
 
 @bot.message_handler(commands=['help'])
 def help_command(message: Message):
@@ -198,7 +209,6 @@ def help_command(message: Message):
                                       f'/myhistory command to check your history or\n'
                                       f'/historyof + {formatting.hitalic("user id")} to check someone`s history',
                      parse_mode='HTML')
-
 
 def history(id):
     with open("users-history.json", "r") as file:
