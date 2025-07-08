@@ -1,5 +1,6 @@
-Just a little recruitment task
+##Captions from YouTube
 
-requirements: pyTelegramBotAPI, pytube, youtube-transcript-api
+Telegram bot to get captions from youtube from the link. Nothing difficult.
+I'm planing to rewrite this bot in more complex way to add more features and learn new things
 
-I used slightly different questions, but the point remains the same and the results of the answers are displayed at the end in the final post.
+That was my recruitment task
